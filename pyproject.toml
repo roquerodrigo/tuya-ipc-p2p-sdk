@@ -1,0 +1,178 @@
+[project]
+name = "tuya-ipc-p2p-sdk"
+version = "0.1.0"
+description = "Async Python SDK for the native P2P video of Tuya IPC cameras"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Rodrigo Roque", email = "rodrigogoncalvesroque@gmail.com" }]
+keywords = ["tuya", "camera", "ipc", "p2p", "mjpeg", "smart-home", "homeassistant"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Home Automation",
+    "Topic :: Multimedia :: Video",
+]
+# Runtime dependencies carry a floor and nothing else. Home Assistant pins its
+# own transitive dependencies exactly, so an `==` pin — or an upper bound —
+# eventually contradicts HA's pin and the consuming integration stops
+# installing. Exact versions belong in the dependency groups below and in
+# uv.lock, neither of which reaches the consumer.
+dependencies = [
+    "aiohttp>=3.11",
+    "aiomqtt>=2.0",
+    "cryptography>=44.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/roquerodrigo/tuya-ipc-p2p-sdk"
+Repository = "https://github.com/roquerodrigo/tuya-ipc-p2p-sdk"
+Issues = "https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tuya_ipc_p2p_sdk"]
+
+# hatchling packages Python files only; the PEP 561 marker has to be named
+# explicitly or consumers get `Any` for everything the SDK exports.
+[tool.hatch.build.targets.wheel.force-include]
+"src/tuya_ipc_p2p_sdk/py.typed" = "tuya_ipc_p2p_sdk/py.typed"
+
+[tool.hatch.build.targets.sdist]
+exclude = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pytest==9.0.3",
+    "pytest-asyncio==1.4.0",
+    "pytest-cov==7.1.0",
+    "pre-commit==4.6.1",
+    "python-dotenv==1.1.1",
+]
+lint = [
+    "ruff==0.16.1",
+    "mypy==2.3.0",
+]
+
+[tool.uv]
+default-groups = ["dev", "lint"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = [
+    "--strict-markers",
+    "--cov=src/tuya_ipc_p2p_sdk",
+    "--cov-report=term-missing",
+    "--cov-fail-under=90",
+]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src"]
+strict = true
+warn_unreachable = true
+disallow_any_explicit = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+check_untyped_defs = false
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests", "examples"]
+
+[tool.ruff.format]
+exclude = ["*.md"]  # ruff 0.16 formats Python blocks in Markdown; docs keep their own layout
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    # Conflict with the formatter.
+    "COM812",  # missing-trailing-comma
+    "ISC001",  # single-line-implicit-string-concatenation
+    "D203",    # incorrect-blank-line-before-class
+    "D212",    # multi-line-summary-first-line
+    # Deliberate project conventions (see CODE_STYLE.md).
+    "CPY001",  # this project ships no per-file copyright headers
+    "ANN401",  # typing.Any is already banned outright by mypy
+    "TID252",  # same-package relative imports are the documented default
+    "D105",    # magic methods are covered by the class docstring
+    "D107",    # __init__ is covered by the class docstring
+    # Error messages are built at the raise site in the documented
+    # "Failed to <verb> <object>: <cause>" shape, which needs the runtime
+    # values; hoisting them into per-message exception classes or local
+    # variables would obscure the one convention every error follows.
+    "EM101",   # raw-string-in-exception
+    "EM102",   # f-string-in-exception
+    "TRY003",  # raise-vanilla-args
+    # A session runs unattended and has to survive every failure mode the
+    # device can hand it: an exception escaping a background task kills the
+    # stream nobody is left watching.
+    "BLE001",  # blind-except
+    # The state callbacks are a public contract shaped by what they report —
+    # ``on_motion(detected)`` reads as the event it is, and forcing the flag
+    # keyword-only would only make every call site noisier.
+    "FBT001",  # boolean-type-hint-positional-argument
+    "FBT002",  # boolean-default-value-positional-argument
+    "FBT003",  # boolean-positional-value-in-call
+]
+
+[tool.ruff.lint.pylint]
+# The protocol builders take the whole wire record — a KCP header is eight
+# fields, a signaling frame eight, a handshake frame six. Splitting them into
+# parameter objects would only move the same values one level down and hide
+# the layout the specification describes.
+max-args = 8
+max-positional-args = 8
+
+[tool.ruff.lint.pydocstyle]
+convention = "pep257"
+
+[tool.ruff.lint.flake8-pytest-style]
+fixture-parentheses = false
+
+[tool.ruff.lint.pyupgrade]
+keep-runtime-typing = true
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "S101",     # assert is the point of a test
+    "S105",     # synthetic credentials in fixtures
+    "S106",
+    "S107",
+    "D",        # tests document themselves through their names
+    "ANN",      # fixtures and lambdas carry no annotations
+    "ARG",      # doubles must match the real signature they stand in for
+    "SLF001",   # asserting on private state is intentional here
+    "PLC0415",  # local imports keep heavy fixtures out of collection
+    "PLR2004",  # literals in assertions are the expected values
+    "PLR0913",  # parametrized tests legitimately accept many fixtures
+    "PLW0108",  # a lambda keeps a callback's signature visible at the call site
+    "PT018",    # one assertion per protocol invariant reads better than three
+    "RUF006",   # a fire-and-forget task is the point of the scenario
+    "RUF012",   # test doubles register their instances on the class
+    "PYI034",   # test doubles are not part of the typed public surface
+    "ASYNC109", # the polling helper takes a timeout because tests set it
+    "ASYNC110", # polling a real socket is what these tests are for
+    "FLY002",   # joining SDP lines keeps the wire layout readable
+    "ISC004",   # long wire vectors are split across lines on purpose
+]
+"examples/**" = [
+    "D",        # scripts explain themselves in their module docstring
+    "T201",     # print is the output of a runnable example
+    "INP001",   # examples/ is a script folder, not a package
+    "PLR2004",  # literals inline keep an example readable
+    "S101",
+    "ASYNC240", # a one-shot write in a script does not need an async filesystem
+]
