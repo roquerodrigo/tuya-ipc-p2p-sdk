@@ -6,7 +6,7 @@ import fake_mqtt
 from fake_relay import MEDIA_KEY, FakeRelay
 from test_media import jpeg, media_packet, record
 from tuya_ipc_p2p_sdk.crypto import aes_ecb_encrypt, encrypt_record
-from tuya_ipc_p2p_sdk.exceptions import TuyaIpcP2pSessionError
+from tuya_ipc_p2p_sdk.exceptions import TuyaIpcP2pDeviceBusyError, TuyaIpcP2pSessionError
 from tuya_ipc_p2p_sdk.json_types import dump_json
 from tuya_ipc_p2p_sdk.models import MqttIdentity, StreamConfig
 from tuya_ipc_p2p_sdk.signaling.envelope import encode_frame
@@ -156,9 +156,22 @@ async def test_a_device_disconnect_ends_the_session_before_it_starts(broker, rel
     await wait_for(lambda: broker.instances and len(broker.instances[-1].published) >= 2)
     broker.instances[-1].deliver(signaling_payload("disconnect", {"close_reason": 12}))
 
-    with pytest.raises(TuyaIpcP2pSessionError, match="close_reason=12"):
+    with pytest.raises(TuyaIpcP2pDeviceBusyError, match="close_reason=12"):
         await start
     assert await session.async_wait_closed() == "device disconnect, close_reason=12"
+    await session.async_close()
+
+
+async def test_a_disconnect_that_is_not_busy_is_an_ordinary_session_error(broker, relay):
+    """Only the busy reply says the device is holding a session."""
+    session = StreamSession(stream_config(relay.port), IDENTITY, UID, lambda _frame: None)
+    start = asyncio.create_task(session.async_start())
+    await wait_for(lambda: broker.instances and len(broker.instances[-1].published) >= 2)
+    broker.instances[-1].deliver(signaling_payload("disconnect", {"close_reason": 4}))
+
+    with pytest.raises(TuyaIpcP2pSessionError, match="close_reason=4") as raised:
+        await start
+    assert not isinstance(raised.value, TuyaIpcP2pDeviceBusyError)
     await session.async_close()
 
 

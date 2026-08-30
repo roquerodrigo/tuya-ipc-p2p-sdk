@@ -9,6 +9,8 @@ it.
 from __future__ import annotations
 
 from .camera_stream import (
+    DEFAULT_BUSY_REFUSAL_LIMIT,
+    DEFAULT_REFUSED_RETRY_SECONDS,
     DEFAULT_RETRY_MAX_SECONDS,
     DEFAULT_RETRY_MIN_SECONDS,
     DEFAULT_SESSION_COOLDOWN_SECONDS,
@@ -20,6 +22,7 @@ from .const import DEFAULT_REGION, REGIONS
 from .exceptions import (
     TuyaIpcP2pAuthenticationError,
     TuyaIpcP2pConnectionError,
+    TuyaIpcP2pDeviceBusyError,
     TuyaIpcP2pError,
     TuyaIpcP2pGatewayError,
     TuyaIpcP2pProtocolError,
@@ -29,7 +32,9 @@ from .models import AccountSession, MqttIdentity, StreamConfig, TuyaDevice
 from .motion_detector import DEFAULT_MOTION_HOLD_SECONDS, DEFAULT_SENSITIVITY, MotionDetector
 
 __all__ = [
+    "DEFAULT_BUSY_REFUSAL_LIMIT",
     "DEFAULT_MOTION_HOLD_SECONDS",
+    "DEFAULT_REFUSED_RETRY_SECONDS",
     "DEFAULT_REGION",
     "DEFAULT_RETRY_MAX_SECONDS",
     "DEFAULT_RETRY_MIN_SECONDS",
@@ -46,6 +51,7 @@ __all__ = [
     "TuyaIpcP2pAuthenticationError",
     "TuyaIpcP2pClient",
     "TuyaIpcP2pConnectionError",
+    "TuyaIpcP2pDeviceBusyError",
     "TuyaIpcP2pError",
     "TuyaIpcP2pGatewayError",
     "TuyaIpcP2pProtocolError",

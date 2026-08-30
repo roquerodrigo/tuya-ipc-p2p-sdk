@@ -33,6 +33,10 @@ DEFAULT_DEVICE_FINGERPRINT = "a" * 44
 DEFAULT_REGION = "us"
 REGIONS: tuple[str, ...] = ("us", "eu", "cn", "in", "we")
 
+# The device's own reason for turning an offer down: a previous session is
+# still held. See PROTOCOL.md for the values seen in practice.
+CLOSE_REASON_BUSY = 12
+
 
 def gateway_url(region: str = DEFAULT_REGION) -> str:
     """Return the mobile API gateway of a region."""

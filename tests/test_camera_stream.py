@@ -3,7 +3,7 @@ import asyncio
 import pytest
 
 from tuya_ipc_p2p_sdk.camera_stream import CameraStream
-from tuya_ipc_p2p_sdk.exceptions import TuyaIpcP2pSessionError
+from tuya_ipc_p2p_sdk.exceptions import TuyaIpcP2pDeviceBusyError, TuyaIpcP2pSessionError
 from tuya_ipc_p2p_sdk.models import MqttIdentity
 
 IDENTITY = MqttIdentity("m1-us.lifeaiot.com", 8883, "client-id", "username", "password")
@@ -14,6 +14,7 @@ class FakeStreamSession:
 
     instances: list["FakeStreamSession"] = []
     fail_on_start = 0
+    refuse_as_busy = False
 
     def __init__(self, config, identity, uid, on_frame):
         self.config = config
@@ -28,6 +29,8 @@ class FakeStreamSession:
     async def async_start(self):
         if FakeStreamSession.fail_on_start > 0:
             FakeStreamSession.fail_on_start -= 1
+            if FakeStreamSession.refuse_as_busy:
+                raise TuyaIpcP2pDeviceBusyError("the device refused it (close_reason=12)")
             raise TuyaIpcP2pSessionError("the device refused it")
 
     def emit(self, frame: bytes) -> None:
@@ -64,6 +67,7 @@ class FakeClient:
 def sessions(monkeypatch):
     FakeStreamSession.instances = []
     FakeStreamSession.fail_on_start = 0
+    FakeStreamSession.refuse_as_busy = False
     monkeypatch.setattr("tuya_ipc_p2p_sdk.camera_stream.StreamSession", FakeStreamSession)
     return FakeStreamSession
 
@@ -247,3 +251,54 @@ async def test_a_listener_that_raises_does_not_stop_the_others(sessions):
     remove()
     remove()
     await stream.async_close()
+
+
+async def test_a_run_of_busy_replies_reports_a_camera_that_needs_a_power_cycle(sessions):
+    """The device stops answering altogether, and only the hardware clears it."""
+    sessions.fail_on_start = 3
+    sessions.refuse_as_busy = True
+    reported: list[bool] = []
+    stream = build_stream(
+        retry_min_seconds=0.01,
+        session_cooldown_seconds=0.0,
+        busy_refusal_limit=3,
+        refused_retry_seconds=0.01,
+    )
+    stream.add_state_listener(lambda: reported.append(stream.needs_power_cycle))
+    await stream.async_start()
+    await wait_for(lambda: stream.needs_power_cycle)
+    await stream.async_stop()
+
+    assert True in reported
+
+
+async def test_a_camera_that_answers_again_stops_needing_a_power_cycle(sessions):
+    sessions.fail_on_start = 2
+    sessions.refuse_as_busy = True
+    stream = build_stream(
+        retry_min_seconds=0.01,
+        session_cooldown_seconds=0.0,
+        busy_refusal_limit=2,
+        refused_retry_seconds=0.01,
+    )
+    await stream.async_start()
+    await wait_for(lambda: stream.needs_power_cycle)
+    await wait_for(lambda: len(sessions.instances) >= 3)
+    sessions.instances[-1].emit(b"\xff\xd8frame")
+    await sessions.instances[-1].async_close()
+    await wait_for(lambda: not stream.needs_power_cycle)
+    await stream.async_stop()
+
+    assert stream.needs_power_cycle is False
+
+
+async def test_a_refusal_that_is_not_busy_does_not_count_towards_the_limit(sessions):
+    sessions.fail_on_start = 4
+    stream = build_stream(
+        retry_min_seconds=0.01, session_cooldown_seconds=0.0, busy_refusal_limit=2
+    )
+    await stream.async_start()
+    await wait_for(lambda: len(sessions.instances) >= 4)
+    await stream.async_stop()
+
+    assert stream.needs_power_cycle is False

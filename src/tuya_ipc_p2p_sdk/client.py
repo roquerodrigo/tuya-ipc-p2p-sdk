@@ -6,6 +6,8 @@ import asyncio
 from typing import TYPE_CHECKING, Self
 
 from .camera_stream import (
+    DEFAULT_BUSY_REFUSAL_LIMIT,
+    DEFAULT_REFUSED_RETRY_SECONDS,
     DEFAULT_RETRY_MAX_SECONDS,
     DEFAULT_RETRY_MIN_SECONDS,
     DEFAULT_SESSION_COOLDOWN_SECONDS,
@@ -116,7 +118,7 @@ class TuyaIpcP2pClient:
         account = await self.async_login()
         return await self._gateway.async_stream_config(account, device_id, local_key)
 
-    def create_camera_stream(
+    def create_camera_stream(  # noqa: PLR0913, PLR0917 -- one knob per timing the device imposes
         self,
         device_id: str,
         local_key: str,
@@ -125,6 +127,8 @@ class TuyaIpcP2pClient:
         retry_min_seconds: float = DEFAULT_RETRY_MIN_SECONDS,
         retry_max_seconds: float = DEFAULT_RETRY_MAX_SECONDS,
         session_cooldown_seconds: float = DEFAULT_SESSION_COOLDOWN_SECONDS,
+        busy_refusal_limit: int = DEFAULT_BUSY_REFUSAL_LIMIT,
+        refused_retry_seconds: float = DEFAULT_REFUSED_RETRY_SECONDS,
     ) -> CameraStream:
         """Build a supervised stream for one camera; nothing connects until it is started."""
         return CameraStream(
@@ -136,6 +140,8 @@ class TuyaIpcP2pClient:
             retry_min_seconds=retry_min_seconds,
             retry_max_seconds=retry_max_seconds,
             session_cooldown_seconds=session_cooldown_seconds,
+            busy_refusal_limit=busy_refusal_limit,
+            refused_retry_seconds=refused_retry_seconds,
         )
 
     async def _async_with_session[T](self, call: Callable[[AccountSession], Awaitable[T]]) -> T:
