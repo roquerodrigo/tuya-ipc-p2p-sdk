@@ -7,10 +7,14 @@ import contextlib
 import time
 from typing import TYPE_CHECKING
 
-from .const import LOGGER
+from .const import CLOSE_REASON_BUSY, LOGGER
 from .control import auth_credential, is_control, parse_control, start_sequence
 from .crypto import decrypt_record, encrypt_record, random_alphanumeric
-from .exceptions import TuyaIpcP2pError, TuyaIpcP2pSessionError
+from .exceptions import (
+    TuyaIpcP2pDeviceBusyError,
+    TuyaIpcP2pError,
+    TuyaIpcP2pSessionError,
+)
 from .jpeg_reassembler import JpegReassembler
 from .media import extract_media_packets
 from .signaling import (
@@ -303,12 +307,17 @@ class StreamSession:
     def _on_device_disconnect(self, close_reason: int) -> None:
         """End the session because the device refused or dropped it."""
         if not self._answer.done():
-            self._answer.set_exception(
-                TuyaIpcP2pSessionError(
-                    "Failed to start the session: the device refused it"
-                    f" (close_reason={close_reason})"
-                )
+            message = (
+                f"Failed to start the session: the device refused it (close_reason={close_reason})"
             )
+            # A busy reply is worth telling apart: on its own it is ordinary,
+            # and in a long run it is the device having stopped answering.
+            error = (
+                TuyaIpcP2pDeviceBusyError(message)
+                if close_reason == CLOSE_REASON_BUSY
+                else TuyaIpcP2pSessionError(message)
+            )
+            self._answer.set_exception(error)
         self._finish(f"device disconnect, close_reason={close_reason}")
 
     def _on_relay_closed(self, error: Exception | None) -> None:

@@ -8,6 +8,7 @@ import time
 from typing import TYPE_CHECKING
 
 from .const import LOGGER
+from .exceptions import TuyaIpcP2pDeviceBusyError
 from .motion_detector import DEFAULT_SENSITIVITY, MotionDetector
 from .stream_session import StreamSession
 
@@ -19,6 +20,14 @@ if TYPE_CHECKING:
 DEFAULT_RETRY_MIN_SECONDS = 3.0
 DEFAULT_RETRY_MAX_SECONDS = 60.0
 DEFAULT_SESSION_COOLDOWN_SECONDS = 5.0
+
+# A busy reply on its own is ordinary. This many in a row, with nothing
+# streaming in between, is the device having stopped answering offers
+# altogether — a state it enters after a dozen back-to-back attempts and stays
+# in until it is power cycled, for the vendor app as much as for this client.
+DEFAULT_BUSY_REFUSAL_LIMIT = 10
+# Once it is in that state, offering every minute is what keeps it there.
+DEFAULT_REFUSED_RETRY_SECONDS = 900.0
 
 # A session that has streamed goes quiet between frames, and this hardware's
 # cadence is a couple of frames a second, so a minute of silence is a stall
@@ -40,7 +49,7 @@ class CameraStream:
     cannot connect, and vice versa.
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913, PLR0917 -- one knob per timing the device imposes
         self,
         client: TuyaIpcP2pClient,
         device_id: str,
@@ -50,6 +59,8 @@ class CameraStream:
         retry_min_seconds: float = DEFAULT_RETRY_MIN_SECONDS,
         retry_max_seconds: float = DEFAULT_RETRY_MAX_SECONDS,
         session_cooldown_seconds: float = DEFAULT_SESSION_COOLDOWN_SECONDS,
+        busy_refusal_limit: int = DEFAULT_BUSY_REFUSAL_LIMIT,
+        refused_retry_seconds: float = DEFAULT_REFUSED_RETRY_SECONDS,
     ) -> None:
         """Describe the camera to stream and how patiently to retry it."""
         self._client = client
@@ -59,6 +70,9 @@ class CameraStream:
         self._retry_min = retry_min_seconds
         self._retry_max = retry_max_seconds
         self._session_cooldown = session_cooldown_seconds
+        self._busy_refusal_limit = busy_refusal_limit
+        self._refused_retry_seconds = refused_retry_seconds
+        self._busy_refusals = 0
         self._motion = MotionDetector(self._on_motion, motion_sensitivity)
         self._subscribers: set[asyncio.Queue[bytes]] = set()
         self._state_listeners: list[Callable[[], None]] = []
@@ -86,6 +100,17 @@ class CameraStream:
         return (
             self._last_frame_at > 0 and time.monotonic() - self._last_frame_at < self._stall_timeout
         )
+
+    @property
+    def needs_power_cycle(self) -> bool:
+        """
+        Whether the device has stopped answering and only a power cycle helps.
+
+        Nothing this client does brings it back: it answers every offer with
+        its busy reply, the vendor app cannot load the picture either, and the
+        state survives for as long as the hardware stays powered.
+        """
+        return self._busy_refusals >= self._busy_refusal_limit
 
     @property
     def motion_detected(self) -> bool:
@@ -201,14 +226,41 @@ class CameraStream:
                     time.monotonic() - started_at,
                     exception,
                 )
+                if isinstance(exception, TuyaIpcP2pDeviceBusyError):
+                    self._note_busy_refusal()
+                else:
+                    self._clear_busy_refusals()
             if streamed:
                 backoff = self._retry_min
+                self._clear_busy_refusals()
             # The device needs a moment to release the session it just closed;
             # reconnecting too fast earns a busy reply on the next offer.
             wait = backoff + self._session_cooldown
+            if self.needs_power_cycle:
+                wait = self._refused_retry_seconds
             LOGGER.debug("Reconnecting %s in %.0fs", self._device_id, wait)
             await self._async_wait_before_retry(wait)
             backoff = min(backoff * 2, self._retry_max)
+
+    def _note_busy_refusal(self) -> None:
+        """Count one busy reply, and report a run of them as the state it is."""
+        self._busy_refusals += 1
+        if self._busy_refusals != self._busy_refusal_limit:
+            return
+        LOGGER.warning(
+            "Camera %s has answered %s offers in a row as busy; it has stopped "
+            "answering and needs to be power cycled",
+            self._device_id,
+            self._busy_refusals,
+        )
+        self._notify_state()
+
+    def _clear_busy_refusals(self) -> None:
+        """Forget the run of busy replies; the device is answering again."""
+        was_stuck = self.needs_power_cycle
+        self._busy_refusals = 0
+        if was_stuck:
+            self._notify_state()
 
     async def _async_wait_before_retry(self, seconds: float) -> None:
         """Back off, but come back the moment the caller asks the stream to stop."""

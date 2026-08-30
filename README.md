@@ -168,6 +168,21 @@ and logging in again if the gateway rejects the session. Every session publishes
 a `disconnect` on its way out, so the device releases it rather than refusing
 the next offer.
 
+## A camera that stops answering
+
+A device that is still holding a session answers the next offer with
+`close_reason=12`, which `TuyaIpcP2pDeviceBusyError` reports. One of those is
+ordinary — the next attempt gets in. A run of them is not: after about a dozen
+back-to-back attempts these cameras stop answering offers from *any* client,
+the vendor app included, and stay that way until the hardware is power cycled.
+
+`CameraStream.needs_power_cycle` reports that state after
+`busy_refusal_limit` consecutive busy replies, and the supervisor stops
+offering every minute — it waits `refused_retry_seconds` between attempts,
+since offering into that state is what holds it there. Any session that streams
+clears it. A consumer can surface it: the Home Assistant integration turns it
+into a repair issue telling the user to power cycle the camera.
+
 ## Layout
 
 ```
