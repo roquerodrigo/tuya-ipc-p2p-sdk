@@ -58,7 +58,7 @@ dev = [
     "python-dotenv==1.2.3",
 ]
 lint = [
-    "ruff==0.16.4",
+    "ruff==0.16.5",
     "mypy==2.3.1",
 ]
 
