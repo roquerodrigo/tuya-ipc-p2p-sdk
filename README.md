@@ -3,6 +3,8 @@
 [![CI](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/tuya-ipc-p2p-sdk)](https://pypi.org/project/tuya-ipc-p2p-sdk/)
 
+[![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-db61a2?logo=githubsponsors&logoColor=white&style=for-the-badge)](https://github.com/sponsors/roquerodrigo)
+
 Async Python SDK for the **native P2P video** of Tuya IPC cameras — the path the
 vendor app uses, spoken directly by this package. No vendor SDK, no external
 process and no cloud RTSP: it logs in, negotiates the session, decrypts the
@@ -213,6 +215,10 @@ uv sync
 The suite is network-free: a fake relay server speaks the handshake and media
 framing over loopback, and a fake broker stands in for MQTT, so the session
 tests exercise the real transport rather than a mock of it.
+
+## Support
+
+This SDK is built and maintained on personal time, on hardware bought for the purpose. If it is useful to you, consider [sponsoring the work](https://github.com/sponsors/roquerodrigo) — it keeps the devices, the testing and the releases coming.
 
 ## License
 
