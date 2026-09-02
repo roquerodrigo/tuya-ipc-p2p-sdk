@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/compare/v0.1.1...v0.1.2) (2026-09-02)
+
+
+### Documentation
+
+* add GitHub Sponsors button and support section ([5ff9be8](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/commit/5ff9be8531c34041d4bfbe362c03ac691edd61f0))
+
 ## [0.1.1](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/compare/v0.1.0...v0.1.1) (2026-08-31)
 
 
