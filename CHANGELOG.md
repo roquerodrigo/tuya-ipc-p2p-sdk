@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.1.2](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/compare/v0.1.1...v0.1.2) (2026-09-22)
+
+
+### Dependencies
+
+* **deps:** bump the python-deps group across 1 directory with 2 updates ([7435ebc](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/commit/7435ebc6f004e8a75ecefe82bd9d26f638228561))
+
+
+### Development Dependencies
+
+* **deps-dev:** bump ruff in the python-deps group ([168bcbc](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/commit/168bcbc794a975fac16923d738075c81ed25431c))
+* **deps-dev:** bump ruff in the python-deps group ([78a6974](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/commit/78a697421eb887aa7874378929de0e7ff1f2d5b3))
+
+
+### Documentation
+
+* add GitHub Sponsors button and support section ([5ff9be8](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/commit/5ff9be8531c34041d4bfbe362c03ac691edd61f0))
+
 ## [0.1.1](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/compare/v0.1.0...v0.1.1) (2026-08-31)
 
 
