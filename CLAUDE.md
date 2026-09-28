@@ -79,5 +79,5 @@ session to rediscover:
 This package is published to PyPI and consumed by the `ha-tuya-ipc-p2p` Home
 Assistant integration (sibling repo), which pins an **exact** version
 (`tuya-ipc-p2p-sdk==X.Y.Z`) in both its `pyproject.toml` dev group and
-`custom_components/tuya_ipc_p2p_sdk/manifest.json`. A release here does not reach
+`custom_components/tuya_ipc_p2p/manifest.json`. A release here does not reach
 the integration until that pin is bumped there.
