@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.1.2](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/compare/v0.1.1...v0.1.2) (2026-09-30)
+
+
+### Dependencies
+
+* **deps:** bump the python-deps group across 1 directory with 2 updates ([7435ebc](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/commit/7435ebc6f004e8a75ecefe82bd9d26f638228561))
+
+
+### Development Dependencies
+
+* **deps-dev:** bump ruff in the python-deps group ([f1d62ca](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/commit/f1d62cab0b2a5ef0a3954df29bc659b530409e2a))
+* **deps-dev:** bump ruff in the python-deps group ([168bcbc](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/commit/168bcbc794a975fac16923d738075c81ed25431c))
+* **deps-dev:** bump ruff in the python-deps group ([78a6974](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/commit/78a697421eb887aa7874378929de0e7ff1f2d5b3))
+
+
+### Documentation
+
+* add GitHub Sponsors button and support section ([5ff9be8](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/commit/5ff9be8531c34041d4bfbe362c03ac691edd61f0))
+* refresh CLAUDE.md ([ea03e92](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/commit/ea03e9272f63b455423c1ed11736b899d7915084))
+
+
+### Build System
+
+* **release:** bump uv.lock through release-please ([b8a54ae](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/commit/b8a54aec824d5d5c3e0cfa5f256c6addc9707ec0))
+
 ## [0.1.1](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/compare/v0.1.0...v0.1.1) (2026-08-31)
 
 
