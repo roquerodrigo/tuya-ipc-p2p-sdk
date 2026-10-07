@@ -8,6 +8,7 @@ it.
 
 from __future__ import annotations
 
+from .app_profile import MOMCOZY, SMART_LIFE, AppProfile
 from .camera_stream import (
     DEFAULT_BUSY_REFUSAL_LIMIT,
     DEFAULT_REFUSED_RETRY_SECONDS,
@@ -17,7 +18,7 @@ from .camera_stream import (
     DEFAULT_STALL_TIMEOUT_SECONDS,
     CameraStream,
 )
-from .client import TuyaIpcP2pClient
+from .client import MomcozyIpcP2pClient, TuyaIpcP2pClient
 from .const import DEFAULT_REGION, REGIONS
 from .exceptions import (
     TuyaIpcP2pAuthenticationError,
@@ -41,9 +42,13 @@ __all__ = [
     "DEFAULT_SENSITIVITY",
     "DEFAULT_SESSION_COOLDOWN_SECONDS",
     "DEFAULT_STALL_TIMEOUT_SECONDS",
+    "MOMCOZY",
     "REGIONS",
+    "SMART_LIFE",
     "AccountSession",
+    "AppProfile",
     "CameraStream",
+    "MomcozyIpcP2pClient",
     "MotionDetector",
     "MqttIdentity",
     "StreamConfig",

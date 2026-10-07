@@ -73,6 +73,7 @@ class CameraStream:
         self._busy_refusal_limit = busy_refusal_limit
         self._refused_retry_seconds = refused_retry_seconds
         self._busy_refusals = 0
+        self._last_failure_type: type[BaseException] | None = None
         self._motion = MotionDetector(self._on_motion, motion_sensitivity)
         self._subscribers: set[asyncio.Queue[bytes]] = set()
         self._state_listeners: list[Callable[[], None]] = []
@@ -83,6 +84,7 @@ class CameraStream:
         self._stall_task: asyncio.Task[None] | None = None
         self._first_frame = asyncio.Event()
         self._stop_requested = asyncio.Event()
+        self._retry_requested = asyncio.Event()
 
     @property
     def device_id(self) -> str:
@@ -157,8 +159,27 @@ class CameraStream:
         if self._supervisor_task is not None:
             return
         self._stop_requested.clear()
+        self._retry_requested.clear()
         self._supervisor_task = asyncio.create_task(self._async_supervise())
         self._stall_task = asyncio.create_task(self._async_watch_for_stalls())
+
+    async def async_retry_now(self) -> None:
+        """
+        Retry promptly after an external signal says the camera is reachable.
+
+        Account polling can see a power-cycled camera return while the stream
+        supervisor is in its deliberately long busy-device cooldown. Waking
+        that delay avoids making a recovered camera wait up to fifteen minutes.
+        """
+        was_stuck = self.needs_power_cycle
+        self._busy_refusals = 0
+        self._last_failure_type = None
+        if was_stuck:
+            self._notify_state()
+        if self._supervisor_task is None:
+            await self.async_start()
+            return
+        self._retry_requested.set()
 
     async def async_stop(self) -> None:
         """Stop supervising and release the camera."""
@@ -220,17 +241,30 @@ class CameraStream:
             except asyncio.CancelledError:
                 raise
             except Exception as exception:
-                LOGGER.warning(
-                    "Failed to stream %s after %.0fs: %s",
-                    self._device_id,
-                    time.monotonic() - started_at,
-                    exception,
-                )
+                failure_type = type(exception)
+                if failure_type is self._last_failure_type:
+                    LOGGER.debug(
+                        "Still unable to stream %s after %.0fs (%s)",
+                        self._device_id,
+                        time.monotonic() - started_at,
+                        failure_type.__name__,
+                    )
+                else:
+                    LOGGER.warning(
+                        "Failed to stream %s after %.0fs (%s)",
+                        self._device_id,
+                        time.monotonic() - started_at,
+                        failure_type.__name__,
+                    )
+                self._last_failure_type = failure_type
                 if isinstance(exception, TuyaIpcP2pDeviceBusyError):
                     self._note_busy_refusal()
                 else:
                     self._clear_busy_refusals()
             if streamed:
+                if self._last_failure_type is not None:
+                    LOGGER.info("Camera %s is streaming again", self._device_id)
+                self._last_failure_type = None
                 backoff = self._retry_min
                 self._clear_busy_refusals()
             # The device needs a moment to release the session it just closed;
@@ -263,10 +297,11 @@ class CameraStream:
             self._notify_state()
 
     async def _async_wait_before_retry(self, seconds: float) -> None:
-        """Back off, but come back the moment the caller asks the stream to stop."""
+        """Back off, but wake promptly after an external recovery signal."""
         with contextlib.suppress(TimeoutError):
             async with asyncio.timeout(seconds):
-                await self._stop_requested.wait()
+                await self._retry_requested.wait()
+        self._retry_requested.clear()
 
     async def _async_run_one_session(self) -> bool:
         """Fetch a fresh config, run one session, and report whether it streamed."""

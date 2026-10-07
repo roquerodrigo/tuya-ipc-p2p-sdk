@@ -2,12 +2,15 @@
 The mobile gateway request signature.
 
 ``sign`` is an HMAC-SHA256 over the whitelisted, non-empty parameters sorted by
-key and joined with ``||``, under a composite key made of four constants of the
-app build. ``postData`` does not enter the string as itself but as a reordered
-MD5 of the encrypted body.
+key and joined with ``||``. The HMAC key is the raw SHA-256 digest of the
+composite identity string made from four constants of the app build.
+``postData`` does not enter the string as itself but as a reordered MD5 of the
+encrypted body.
 """
 
 from __future__ import annotations
+
+import hashlib
 
 from ..const import COMPOSITE_KEY
 from ..crypto import hmac_sha256_hex, md5_hex
@@ -45,7 +48,7 @@ _SIGN_WHITELIST: frozenset[str] = frozenset(
 
 def sign(sign_string: str, key: str = COMPOSITE_KEY) -> str:
     """Return the signature of an assembled sign string."""
-    return hmac_sha256_hex(key, sign_string)
+    return hmac_sha256_hex(hashlib.sha256(key.encode()).digest(), sign_string)
 
 
 def build_sign_string(params: dict[str, str]) -> str:

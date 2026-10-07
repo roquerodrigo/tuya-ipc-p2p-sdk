@@ -10,18 +10,8 @@ from uuid import uuid4
 import aiohttp
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
-from ..const import (
-    APP_VERSION,
-    CH_KEY,
-    CLIENT_ID,
-    COMPOSITE_KEY,
-    DEFAULT_DEVICE_FINGERPRINT,
-    DEFAULT_REGION,
-    LANGUAGE,
-    SDK_VERSION,
-    TTID,
-    gateway_url,
-)
+from ..app_profile import SMART_LIFE, AppProfile
+from ..const import DEFAULT_DEVICE_FINGERPRINT, DEFAULT_REGION
 from ..crypto import md5_hex
 from ..exceptions import (
     TuyaIpcP2pAuthenticationError,
@@ -80,13 +70,15 @@ class GatewayClient:
         region: str = DEFAULT_REGION,
         device_fingerprint: str = DEFAULT_DEVICE_FINGERPRINT,
         session: aiohttp.ClientSession | None = None,
-        composite_key: str = COMPOSITE_KEY,
+        composite_key: str | None = None,
+        profile: AppProfile = SMART_LIFE,
     ) -> None:
         """Point the client at a region and adopt an HTTP session, if one was given."""
         self._region = region
-        self._url = gateway_url(region)
+        self._profile = profile
+        self._url = profile.gateway_url(region)
         self._device_fingerprint = device_fingerprint
-        self._composite_key = composite_key
+        self._composite_key = composite_key or profile.composite_key
         self._session = session
         self._owns_session = session is None
 
@@ -146,21 +138,23 @@ class GatewayClient:
         params = {
             "a": api,
             "v": version,
-            "clientId": CLIENT_ID,
+            "clientId": self._profile.client_id,
             "time": str(int(time.time())),
             "requestId": request_id,
-            "lang": LANGUAGE,
+            "lang": self._profile.language,
             "deviceId": self._device_fingerprint,
-            "appVersion": APP_VERSION,
-            "ttid": TTID,
+            "appVersion": self._profile.app_version,
+            "ttid": self._profile.ttid,
             "os": "Android",
-            "sdkVersion": SDK_VERSION,
-            "chKey": CH_KEY,
+            "sdkVersion": self._profile.sdk_version,
+            "chKey": self._profile.ch_key,
             "et": "3",
             "postData": encrypted,
         }
         if session:
             params["sid"] = session.sid
+        if self._profile.request_params:
+            params.update(self._profile.request_params)
         if extra_params:
             params.update(extra_params)
         signed = dict(params)
@@ -179,7 +173,7 @@ class GatewayClient:
                     data=params,
                     headers={
                         "Content-Type": "application/x-www-form-urlencoded",
-                        "User-Agent": f"TY/{APP_VERSION}",
+                        "User-Agent": f"TY/{self._profile.app_version}",
                     },
                 )
                 response.raise_for_status()
@@ -272,6 +266,46 @@ class GatewayClient:
             device_fingerprint=self._device_fingerprint,
         )
 
+    async def async_login_uid(
+        self, country_code: str, uid: str, delegated_token: str
+    ) -> AccountSession:
+        """Log in using credentials delegated by an OEM app such as Momcozy."""
+        try:
+            token = await self._async_call_object(
+                "thing.m.user.username.token.get",
+                "2.0",
+                {"countryCode": country_code, "username": uid, "isUid": True},
+            )
+            # The Android SDK calls this helper ``md5AsBase64``, but its
+            # implementation actually returns lowercase hexadecimal.
+            password_md5 = md5_hex(delegated_token)
+            encrypted_password = _encrypt_password(
+                require_str(token, "publicKey"),
+                require_str(token, "exponent"),
+                password_md5,
+            )
+            account = await self._async_call_object(
+                "thing.m.user.uid.password.login.reg",
+                "1.0",
+                {
+                    "countryCode": country_code,
+                    "uid": uid,
+                    "passwd": encrypted_password,
+                    "token": require_str(token, "token"),
+                    "ifencrypt": 1,
+                    "createGroup": False,
+                    "options": '{"group": 1}',
+                },
+            )
+        except TuyaIpcP2pGatewayError as exception:
+            raise TuyaIpcP2pAuthenticationError(f"Failed to log in: {exception}") from exception
+        return AccountSession(
+            sid=require_str(account, "sid"),
+            ecode=require_str(account, "ecode"),
+            uid=require_str(account, "uid"),
+            device_fingerprint=self._device_fingerprint,
+        )
+
     async def async_stream_config(
         self, session: AccountSession, device_id: str, local_key: str
     ) -> StreamConfig:
@@ -322,7 +356,7 @@ class GatewayClient:
 
     def mqtt_identity(self, session: AccountSession) -> MqttIdentity:
         """Return the signaling broker identity of a logged-in account."""
-        return build_mqtt_identity(session, self._region)
+        return build_mqtt_identity(session, self._region, self._profile)
 
 
 def _parse_device(raw: JsonObject) -> TuyaDevice | None:
