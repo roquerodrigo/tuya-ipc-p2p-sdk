@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Self
 
+from .app_profile import MOMCOZY, SMART_LIFE, AppProfile
 from .camera_stream import (
     DEFAULT_BUSY_REFUSAL_LIMIT,
     DEFAULT_REFUSED_RETRY_SECONDS,
@@ -17,6 +18,7 @@ from .camera_stream import (
 from .const import DEFAULT_DEVICE_FINGERPRINT, DEFAULT_REGION, LOGGER
 from .exceptions import TuyaIpcP2pGatewayError
 from .gateway import GatewayClient
+from .momcozy import MomcozyCloudClient
 from .motion_detector import DEFAULT_SENSITIVITY
 
 if TYPE_CHECKING:
@@ -45,12 +47,13 @@ class TuyaIpcP2pClient:
         region: str = DEFAULT_REGION,
         device_fingerprint: str = DEFAULT_DEVICE_FINGERPRINT,
         session: aiohttp.ClientSession | None = None,
+        profile: AppProfile = SMART_LIFE,
     ) -> None:
         """Describe the account and the region its gateway lives in."""
         self._email = email
         self._password = password
         self._country_code = country_code
-        self._gateway = GatewayClient(region, device_fingerprint, session)
+        self._gateway = GatewayClient(region, device_fingerprint, session, profile=profile)
         self._account: AccountSession | None = None
         self._login_lock = asyncio.Lock()
 
@@ -158,3 +161,47 @@ class TuyaIpcP2pClient:
     async def async_close(self) -> None:
         """Release the gateway's HTTP session, if this client opened it."""
         await self._gateway.async_close()
+
+
+class MomcozyIpcP2pClient(TuyaIpcP2pClient):
+    """A Tuya IPC client authenticated through a Momcozy account."""
+
+    def __init__(
+        self,
+        email: str,
+        password: str,
+        country_code: str,
+        region: str = MOMCOZY.default_region,
+        device_fingerprint: str = DEFAULT_DEVICE_FINGERPRINT,
+        session: aiohttp.ClientSession | None = None,
+        language: str = "en",
+        time_zone: str = "Europe/Berlin",
+    ) -> None:
+        super().__init__(
+            email,
+            password,
+            country_code,
+            region,
+            device_fingerprint,
+            session,
+            MOMCOZY,
+        )
+        self._momcozy = MomcozyCloudClient(country_code, language, time_zone, session)
+
+    async def async_login(self) -> AccountSession:
+        """Exchange Momcozy credentials for a fresh Tuya account session."""
+        async with self._login_lock:
+            credentials = await self._momcozy.async_tuya_credentials(self._email, self._password)
+            account = await self._gateway.async_login_uid(
+                credentials.country_code,
+                credentials.uid,
+                credentials.token,
+            )
+            self._account = account
+            LOGGER.debug("Logged in to Momcozy/Tuya")
+            return account
+
+    async def async_close(self) -> None:
+        """Release both HTTP clients."""
+        await self._momcozy.async_close()
+        await super().async_close()

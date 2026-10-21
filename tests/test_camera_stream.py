@@ -292,6 +292,36 @@ async def test_a_camera_that_answers_again_stops_needing_a_power_cycle(sessions)
     assert stream.needs_power_cycle is False
 
 
+async def test_retry_now_wakes_a_long_busy_device_cooldown(sessions):
+    sessions.fail_on_start = 2
+    sessions.refuse_as_busy = True
+    stream = build_stream(
+        retry_min_seconds=0.01,
+        session_cooldown_seconds=0.0,
+        busy_refusal_limit=2,
+        refused_retry_seconds=60,
+    )
+    await stream.async_start()
+    await wait_for(lambda: stream.needs_power_cycle)
+
+    sessions.refuse_as_busy = False
+    await stream.async_retry_now()
+    await wait_for(lambda: len(sessions.instances) >= 3)
+    await stream.async_stop()
+
+    assert stream.needs_power_cycle is False
+
+
+async def test_retry_now_starts_a_stopped_stream(sessions):
+    stream = build_stream()
+
+    await stream.async_retry_now()
+    await wait_for(lambda: sessions.instances)
+    await stream.async_stop()
+
+    assert len(sessions.instances) == 1
+
+
 async def test_a_refusal_that_is_not_busy_does_not_count_towards_the_limit(sessions):
     sessions.fail_on_start = 4
     stream = build_stream(
