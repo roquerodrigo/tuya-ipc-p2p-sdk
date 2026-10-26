@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/compare/v0.1.1...v0.1.2) (2026-10-26)
+
+
+### Miscellaneous Chores
+
+* **release:** keep only user-facing changes in the changelog ([daa3df6](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/commit/daa3df62d7f3fe77fb08545bcf083a8b174d7ba0))
+
 ## [0.1.1](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/compare/v0.1.0...v0.1.1) (2026-08-31)
 
 
