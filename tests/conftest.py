@@ -16,9 +16,21 @@ def login_key_pair():
     return private, str(numbers.n), str(numbers.e)
 
 
-def encrypted_envelope(request_id: str, ecode: str | None, result: object) -> str:
+def encrypted_envelope(
+    request_id: str,
+    ecode: str | None,
+    result: object,
+    composite_key: str | None = None,
+) -> str:
     """Wrap a result the way the gateway does, encrypted under the request's body key."""
-    key = body_key(request_id, ecode) if ecode else pre_login_body_key(request_id)
+    if composite_key is None:
+        key = body_key(request_id, ecode) if ecode else pre_login_body_key(request_id)
+    else:
+        key = (
+            body_key(request_id, ecode, composite_key)
+            if ecode
+            else pre_login_body_key(request_id, composite_key)
+        )
     inner = dump_json({"result": result, "success": True})
     return json.dumps({"result": encrypt_post_data(key, inner)})
 

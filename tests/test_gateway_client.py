@@ -1,15 +1,20 @@
+import hashlib
 import json
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric import padding
 
 from conftest import encrypted_envelope, error_envelope
+from tuya_ipc_p2p_sdk import MOMCOZY
+from tuya_ipc_p2p_sdk.crypto import md5_hex
 from tuya_ipc_p2p_sdk.exceptions import (
     TuyaIpcP2pAuthenticationError,
     TuyaIpcP2pGatewayError,
     TuyaIpcP2pProtocolError,
 )
+from tuya_ipc_p2p_sdk.gateway.body import decrypt_post_data
 from tuya_ipc_p2p_sdk.gateway.client import GatewayClient
+from tuya_ipc_p2p_sdk.gateway.signing import pre_login_body_key
 from tuya_ipc_p2p_sdk.models import AccountSession
 
 ECODE = "0123456789abcdef"
@@ -142,8 +147,128 @@ async def test_login_failure_becomes_an_authentication_error(gateway):
         await GatewayClient().async_login("user@example.com", "wrong", "55")
 
 
+async def test_uid_login_uses_the_oem_token_and_returns_a_session(gateway, login_key_pair):
+    private, modulus, exponent = login_key_pair
+    gateway.results["thing.m.user.username.token.get"] = {
+        "publicKey": modulus,
+        "exponent": exponent,
+        "token": "login-token",
+    }
+    gateway.results["thing.m.user.uid.password.login.reg"] = {
+        "sid": SID,
+        "ecode": ECODE,
+        "uid": "oem-uid",
+    }
+    account = await GatewayClient().async_login_uid("49", "oem-uid", "delegated-token")
+    assert account.uid == "oem-uid"
+    assert len(gateway.calls) == 2
+
+    token_call, login_call = gateway.calls
+    token_post = json.loads(
+        decrypt_post_data(pre_login_body_key(token_call["requestId"]), token_call["postData"])
+    )
+    assert token_call["a"] == "thing.m.user.username.token.get"
+    assert token_call["v"] == "2.0"
+    assert token_post == {
+        "countryCode": "49",
+        "username": "oem-uid",
+        "isUid": True,
+    }
+
+    login_post = json.loads(
+        decrypt_post_data(pre_login_body_key(login_call["requestId"]), login_call["postData"])
+    )
+    decrypted_password = private.decrypt(
+        bytes.fromhex(login_post["passwd"]), padding.PKCS1v15()
+    ).decode()
+    assert login_call["a"] == "thing.m.user.uid.password.login.reg"
+    assert login_call["v"] == "1.0"
+    assert (
+        decrypted_password
+        == hashlib.md5(  # noqa: S324 -- protocol requirement
+            b"delegated-token"
+        ).hexdigest()
+    )
+    assert login_post == {
+        "countryCode": "49",
+        "uid": "oem-uid",
+        "passwd": login_post["passwd"],
+        "token": "login-token",
+        "ifencrypt": 1,
+        "createGroup": False,
+        "options": '{"group": 1}',
+    }
+
+
+async def test_uid_login_works_when_md5_is_blocked_for_security(
+    gateway, login_key_pair, monkeypatch
+):
+    _private, modulus, exponent = login_key_pair
+    gateway.results["thing.m.user.username.token.get"] = {
+        "publicKey": modulus,
+        "exponent": exponent,
+        "token": "login-token",
+    }
+    gateway.results["thing.m.user.uid.password.login.reg"] = {
+        "sid": SID,
+        "ecode": ECODE,
+        "uid": "oem-uid",
+    }
+    real_md5 = hashlib.md5
+
+    def fips_md5(value=b"", *, usedforsecurity=True):
+        if usedforsecurity:
+            raise ValueError("MD5 blocked for security use")
+        return real_md5(value, usedforsecurity=False)
+
+    monkeypatch.setattr(hashlib, "md5", fips_md5)
+    account = await GatewayClient().async_login_uid("49", "oem-uid", "delegated-token")
+    assert account.uid == "oem-uid"
+
+
+async def test_momcozy_profile_drives_gateway_signing_and_mqtt_identity(monkeypatch):
+    calls = []
+
+    async def fake_post(self, api, params):
+        calls.append(params)
+        return encrypted_envelope(params["requestId"], None, {"value": 1}, MOMCOZY.composite_key)
+
+    monkeypatch.setattr(GatewayClient, "_post", fake_post)
+    client = GatewayClient("eu", profile=MOMCOZY)
+    assert await client.async_call("some.api", "1.0", {"hello": "world"}) == {"value": 1}
+
+    params = calls[0]
+    assert params["clientId"] == MOMCOZY.client_id
+    assert params["chKey"] == MOMCOZY.ch_key
+    assert params["ttid"] == "android"
+    assert params["deviceCoreVersion"] == "7.5.0"
+    assert json.loads(
+        decrypt_post_data(
+            pre_login_body_key(params["requestId"], MOMCOZY.composite_key),
+            params["postData"],
+        )
+    ) == {"hello": "world"}
+
+    identity = client.mqtt_identity(ACCOUNT)
+    assert identity.host == "m1.tuyaeu.com"
+    assert identity.client_id.startswith("com.lute.momcozy_mb_")
+    assert f"_{MOMCOZY.client_id}_{MOMCOZY.ch_key}_mb_" in identity.username
+
+
+def test_momcozy_request_signature_matches_the_fixed_protocol_vector(monkeypatch):
+    monkeypatch.setattr("tuya_ipc_p2p_sdk.gateway.client.time.time", lambda: 1_700_000_000)
+    params = GatewayClient("eu", profile=MOMCOZY)._build_params(
+        "some.api",
+        "1.0",
+        "fixed-request-id",
+        "encrypted-body",
+        None,
+        None,
+    )
+    assert params["sign"] == ("b03e367c7513417eb9b45578a1b1b87fff611a22436c457a968ec69fc8958d9c")
+
+
 async def test_the_encrypted_password_decrypts_to_the_md5_of_the_plaintext(gateway, login_key_pair):
-    from tuya_ipc_p2p_sdk.crypto import md5_hex
     from tuya_ipc_p2p_sdk.gateway.client import _encrypt_password
 
     private, modulus, exponent = login_key_pair
