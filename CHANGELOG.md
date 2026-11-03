@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/compare/v0.1.1...v0.1.2) (2026-11-03)
+
+### Improvements
+
+- Updates the aiohttp dependency to version 3.14.5. ([#18](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/pull/18), [#20](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/pull/20))
+- Updates the cryptography dependency to version 50.0.2. ([#6](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/pull/6), [#15](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/pull/15))
+
 ## [0.1.1](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/compare/v0.1.0...v0.1.1) (2026-08-31)
 
 
