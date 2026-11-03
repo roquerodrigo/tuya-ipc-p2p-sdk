@@ -125,7 +125,7 @@ the dependency groups and `uv.lock`, neither of which reaches the consumer.
 ## Conventional commits
 
 All commits follow [Conventional Commits](https://www.conventionalcommits.org/),
-which `release-please` parses to bump the version and generate `CHANGELOG.md`.
+which Release Autopilot parses to bump the version and write `CHANGELOG.md`.
 Subject line: imperative mood, lowercase, no trailing period. `feat` bumps the
 minor, `fix`/`perf`/`deps` the patch, and a `BREAKING CHANGE:` footer the major.
 
