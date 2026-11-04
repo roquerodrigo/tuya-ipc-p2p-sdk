@@ -14,6 +14,12 @@ media and hands you JPEG frames.
 > supported by Tuya. It targets the mobile API gateway and the P2P protocol
 > their app uses. The vendor can change either side at any time and break this
 > SDK without notice.
+>
+> Momcozy and BM04 are trademarks of their respective owners and are used
+> only to identify compatible hardware. This independent implementation does
+> not distribute vendor binaries, decompiled source, artwork or account
+> credentials. It contains only the client-side interoperability constants
+> and protocol behavior needed to communicate with users' own devices.
 
 The official Tuya integrations stream these cameras over a cloud RTSP link,
 which several devices — pet feeders and other low-cost IPC hardware among
@@ -27,6 +33,7 @@ answer.
 | Area | State |
 |---|---|
 | Email/password login against the mobile gateway | ✅ |
+| Momcozy delegated UID login (BM04) | ✅ |
 | Camera discovery (devices that answer the IPC config API) | ✅ |
 | Signaling over MQTT, offer/answer, trickled candidates | ✅ |
 | TCP relay transport (handshake, keepalive, tagged KCP frames) | ✅ |
@@ -37,7 +44,7 @@ answer.
 | Audio (conversation 2) | ⚠️ received and discarded |
 | The channel-0 control surface | ⚠️ decoded but not exposed |
 | H264 cameras | ❌ untested — validated against MJPEG hardware only |
-| Regions other than `us` | ⚠️ declared, only `us` is exercised live |
+| Regions | ⚠️ Smart Life `us` and Momcozy `eu` exercised live |
 | Public API stability | ❌ breaking changes still happen across `0.x` |
 
 See [`CHANGELOG.md`](./CHANGELOG.md) for breaking changes between releases.
@@ -57,7 +64,8 @@ uv add tuya-ipc-p2p-sdk
 ## What you need
 
 - The account the camera belongs to: **email**, **password** and the
-  **country code** (the calling code — `1` for the US, `55` for Brazil).
+  **country code**. Smart Life uses the calling code (`1` for the US, `55` for
+  Brazil); Momcozy uses a two-letter code such as `DE`.
 - The **region** its gateway lives in (`us` by default).
 
 The device id and its local key are discovered from the account; nothing has to
@@ -91,6 +99,20 @@ async def main() -> None:
 
 asyncio.run(main())
 ```
+
+For a Momcozy BM04, use `MomcozyIpcP2pClient`; it performs the same delegation
+as the official app before entering the shared Tuya P2P path:
+
+```python
+from tuya_ipc_p2p_sdk import MomcozyIpcP2pClient
+
+async with MomcozyIpcP2pClient(
+    "you@example.com", "secret", "DE", region="eu"
+) as client:
+    devices = await client.async_list_devices()
+```
+
+Listing devices does not open a video session. Starting a `CameraStream` does.
 
 `async_frames()` starts with the most recent frame and then yields every new
 one. Several consumers can read it at once; each gets its own shallow queue, so

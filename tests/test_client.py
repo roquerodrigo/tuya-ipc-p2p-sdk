@@ -1,6 +1,8 @@
+from types import SimpleNamespace
+
 import pytest
 
-from tuya_ipc_p2p_sdk import TuyaIpcP2pClient
+from tuya_ipc_p2p_sdk import MOMCOZY, MomcozyIpcP2pClient, TuyaIpcP2pClient
 from tuya_ipc_p2p_sdk.exceptions import TuyaIpcP2pGatewayError
 from tuya_ipc_p2p_sdk.models import AccountSession, TuyaDevice
 
@@ -16,9 +18,14 @@ class FakeGateway:
         self.configs = 0
         self.devices = 0
         self.expire_once = False
+        self.uid_login = None
 
     async def async_login(self, email, password, country_code):
         self.logins += 1
+        return ACCOUNT
+
+    async def async_login_uid(self, country_code, uid, delegated_token):
+        self.uid_login = (country_code, uid, delegated_token)
         return ACCOUNT
 
     def _maybe_expire(self) -> None:
@@ -114,3 +121,31 @@ async def test_the_client_is_a_context_manager(client):
     built, _gateway = client
     async with built as scoped:
         assert scoped is built
+
+
+async def test_momcozy_client_delegates_login_into_the_momcozy_gateway(monkeypatch):
+    gateway = FakeGateway()
+    built_profile = None
+
+    class FakeMomcozy:
+        async def async_tuya_credentials(self, email, password):
+            assert (email, password) == ("user@example.com", "hunter2")
+            return SimpleNamespace(country_code="49", uid="oem-uid", token="delegated-token")
+
+        async def async_close(self):
+            return None
+
+    def fake_gateway(*args, **kwargs):
+        nonlocal built_profile
+        built_profile = kwargs["profile"]
+        return gateway
+
+    monkeypatch.setattr("tuya_ipc_p2p_sdk.client.GatewayClient", fake_gateway)
+    monkeypatch.setattr(
+        "tuya_ipc_p2p_sdk.client.MomcozyCloudClient", lambda *args, **kwargs: FakeMomcozy()
+    )
+    client = MomcozyIpcP2pClient("user@example.com", "hunter2", "DE")
+
+    assert await client.async_login() == ACCOUNT
+    assert gateway.uid_login == ("49", "oem-uid", "delegated-token")
+    assert built_profile is MOMCOZY
