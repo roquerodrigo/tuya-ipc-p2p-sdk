@@ -238,7 +238,9 @@ class GatewayClient:
         Log in with email and password.
 
         The password's MD5 is RSA-encrypted under the key the token call hands
-        out, and posted to the login call.
+        out, and posted to the login call. A refusal is an authentication error,
+        except a rate limit, which is raised as the gateway error it is so the
+        caller retries later instead of asking for new credentials.
         """
         try:
             token = await self._async_call_object(
@@ -264,6 +266,8 @@ class GatewayClient:
                 },
             )
         except TuyaIpcP2pGatewayError as exception:
+            if exception.throttled:
+                raise
             raise TuyaIpcP2pAuthenticationError(f"Failed to log in: {exception}") from exception
         return AccountSession(
             sid=require_str(account, "sid"),

@@ -17,6 +17,10 @@ _SESSION_EXPIRED_CODES: frozenset[str] = frozenset(
     }
 )
 
+# Codes that mean the gateway is rate limiting the caller: the request was
+# fine and is worth retrying later, whatever the API.
+_THROTTLED_CODES: frozenset[str] = frozenset({"REQUEST_TOO_FREQUENTLY_PLEASE_TRY_AGAIN_LATER"})
+
 
 class TuyaIpcP2pGatewayError(TuyaIpcP2pError):
     """The gateway answered, and the answer was a refusal."""
@@ -31,3 +35,8 @@ class TuyaIpcP2pGatewayError(TuyaIpcP2pError):
     def session_expired(self) -> bool:
         """Whether the refusal means the login session has to be renewed."""
         return self.code in _SESSION_EXPIRED_CODES
+
+    @property
+    def throttled(self) -> bool:
+        """Whether the refusal is a rate limit rather than a verdict on the request."""
+        return self.code in _THROTTLED_CODES

@@ -142,6 +142,23 @@ async def test_login_failure_becomes_an_authentication_error(gateway):
         await GatewayClient().async_login("user@example.com", "wrong", "55")
 
 
+@pytest.mark.parametrize(
+    "api", ["smartlife.m.user.username.token.get", "smartlife.m.user.email.password.login"]
+)
+async def test_a_throttled_login_is_not_an_authentication_error(gateway, login_key_pair, api):
+    _, modulus, exponent = login_key_pair
+    gateway.results["smartlife.m.user.username.token.get"] = {
+        "publicKey": modulus,
+        "exponent": exponent,
+        "token": "login-token",
+    }
+    gateway.errors[api] = ("REQUEST_TOO_FREQUENTLY_PLEASE_TRY_AGAIN_LATER", "slow down")
+    with pytest.raises(TuyaIpcP2pGatewayError) as raised:
+        await GatewayClient().async_login("user@example.com", "hunter2", "55")
+    assert raised.value.throttled
+    assert not isinstance(raised.value, TuyaIpcP2pAuthenticationError)
+
+
 async def test_the_encrypted_password_decrypts_to_the_md5_of_the_plaintext(gateway, login_key_pair):
     from tuya_ipc_p2p_sdk.crypto import md5_hex
     from tuya_ipc_p2p_sdk.gateway.client import _encrypt_password
