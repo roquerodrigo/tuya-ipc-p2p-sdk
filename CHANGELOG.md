@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.3](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/compare/v0.1.2...v0.1.3) (2026-11-08)
+
+### Bug fixes
+
+- A login rate-limited by the gateway is no longer reported as wrong credentials, so it can be retried later without asking for new ones. ([#27](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/pull/27))
+
 ## [0.1.2](https://github.com/roquerodrigo/tuya-ipc-p2p-sdk/compare/v0.1.1...v0.1.2) (2026-11-03)
 
 ### Improvements
